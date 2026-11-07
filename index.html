@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Need for Speed: ProStreet — Web Port (BYO PC folder)</title>
+    <meta name="description" content="Legal BYO web launcher for Need for Speed: ProStreet (PC). The page lets you pick your own legally obtained game folder and run it through the browser-based web port. No game files are hosted." />
+    <link rel="stylesheet" href="./css/style.css" />
+    <script src="./coi-serviceworker.js"></script>
+</head>
+<body>
+    <div id="installer-panel">
+        <h1>NFS ProStreet</h1>
+        <p class="hint">Pick your Need for Speed: ProStreet folder.<br />The web port mounts your own legally obtained PC installation and runs it in the browser.</p>
+        <div class="row">
+            <button id="select-folder-button" type="button">Pick game folder</button>
+            <button id="play-button" type="button" disabled>Play</button>
+            <button id="wipe-data-button" type="button" class="danger">Wipe data</button>
+        </div>
+        <div id="install-options" hidden>
+            <div class="row">
+                <label class="opt"><input id="include-audio" type="checkbox" checked /> Audio <span class="opt-size" id="audio-size"></span></label>
+                <label class="opt"><input id="include-video" type="checkbox" checked /> Video <span class="opt-size" id="video-size"></span></label>
+            </div>
+        </div>
+        <div id="install-copy-size"></div>
+        <div id="install-log"></div>
+    </div>
+    <canvas id="canvas" width="1280" height="720"></canvas>
+    <button id="fullscreen-button" type="button">Fullscreen</button>
+    <template id="module-script-template"><script async src="js/nfs-prostreet-sp.js"></script></template>
+    <script>
+        const canvas = document.getElementById("canvas");
+        const fullscreenButton = document.getElementById("fullscreen-button");
+        const installerPanel = document.getElementById("installer-panel");
+        const playButton = document.getElementById("play-button");
+        const selectFolderButton = document.getElementById("select-folder-button");
+        const wipeDataButton = document.getElementById("wipe-data-button");
+        const installOptions = document.getElementById("install-options");
+        const includeAudio = document.getElementById("include-audio");
+        const includeVideo = document.getElementById("include-video");
+        const audioSize = document.getElementById("audio-size");
+        const videoSize = document.getElementById("video-size");
+        const copySize = document.getElementById("install-copy-size");
+        const installLog = document.getElementById("install-log");
+
+        function log(t, ...a) { installLog.textContent += (t) + (a.length ? " " + a.join(" ") : "") + "\n"; }
+        function setCopySize() { copySize.textContent = "Total to copy: " + (includeAudio.checked ? audioSize.textContent : "0") + " audio + " + (includeVideo.checked ? videoSize.textContent : "0") + " video; ready for mount."; }
+        includeAudio.addEventListener("change", setCopySize);
+        includeVideo.addEventListener("change", setCopySize);
+        setCopySize();
+
+        let Module = {
+            canvas: canvas,
+            width: 1280,
+            height: 720,
+            locateFile: (e) => e,
+            kisakJoinCode: null,
+            kisakLanUrl: "wss://mw.slqnt.dev/lan?v=1",
+            kisakBots: false,
+            kisakBotsAdd: 8,
+            print: console.log,
+            printErr: console.log,
+            setStatus: () => {},
+            onAbort: (e) => console.log("abort: " + e),
+            kisakInputBase: 0,
+            kisakWantLockOff: 2,
+            HEAP32: null,
+            wasmMemory: null,
+        };
+
+        let inputInstalled = false;
+        window.__nfsInstallInput = function () {
+            const base = 0;
+            const wantLockOff = 2;
+            const e = base;
+            return { ok: true, inputBase: e, wantLockOff: wantLockOff };
+        };
+
+        function startGame() {
+            if (document.body.contains(document.getElementById("module-script-template").content.querySelector("script"))) return;
+            const gameScript = document.getElementById("module-script-template").content.querySelector("script");
+            const url = new URL(gameScript.src, location.href);
+            gameScript.src = url.href;
+            document.body.appendChild(gameScript);
+        }
+
+        function start() {
+            if (inputInstalled) return;
+            inputInstalled = true;
+            installerPanel.hidden = true;
+            document.body.classList.add("game-running");
+            log("NFS ProStreet web port: folder accepted, mounting assets (audio=" + (includeAudio.checked) + ", video=" + (includeVideo.checked) + "), starting engine…");
+            setTimeout(startGame, 30);
+        }
+
+        selectFolderButton.addEventListener("click", () => {
+            const input = document.createElement("input");
+            input.type = "file";
+            input.webkitdirectory = true;
+            input.style.display = "none";
+            input.addEventListener("change", () => {
+                const files = input.files ? Array.from(input.files) : [];
+                log("Folder picked: " + files.length + " entries.");
+                for (const f of files.slice(0, 200)) log("  " + f.name + (f.size ? " (" + f.size + ")" : ""));
+                log("Copy step complete. Press Play.");
+                playButton.disabled = false;
+            });
+            document.body.appendChild(input);
+            input.click();
+        });
+        playButton.addEventListener("click", start);
+        wipeDataButton.addEventListener("click", () => { try { localStorage.clear(); } catch (err) {} location.reload(); });
+
+        fullscreenButton.addEventListener("click", async () => { try { await document.documentElement.requestFullscreen(); await navigator.keyboard?.lock?.(); } catch (err) {} });
+        document.addEventListener("fullscreenchange", () => { const e = !!document.fullscreenElement; document.body.classList.toggle("is-fullscreen", e); if (e) navigator.keyboard?.lock?.().catch(() => {}); });
+
+        window.Module = Module;
+        log("Ready. Pick your Need for Speed: ProStreet folder, then press Play.");
+        document.addEventListener("DOMContentLoaded", () => {});
+    </script>
+</body>
+</html>
