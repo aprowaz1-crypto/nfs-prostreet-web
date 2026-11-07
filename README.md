@@ -19,8 +19,15 @@ game through a **WebAssembly** runtime in the browser.
 - The user-facing launcher flow (installer → folder pick → mount/copy → Play → canvas →
   fullscreen) is implemented in `index.html`.
 - The actual ProStreet **WASM port runtime** integration point is `js/nfs-prostreet-sp.js`
-  (Emscripten `Module`-style interface). The game engine core (AOT-recompiled ProStreet /
+  (Emscripten `Module`-style interface + boot orchestration). The game engine core (AOT-recompiled ProStreet /
   PortSpeed-style WASM) plugs in there.
+- The runtime boot chain is implemented in `js/nfs-prostreet-sp.js` and follows the PortSpeed
+  `web/src/wasm_loader.ts` contract: fetch `/prostreet.json` → compile `/prostreet.wasm` → instantiate
+  (WASI `wasi_snapshot_preview1` shims, single linear memory, reactor `_initialize`, `fntab_init`) →
+  memory-size check vs `guestEnd` → `prostreet_load_pe` (`/data/nfs.exe`) → `prostreet_main` →
+  60 FPS `prostreet_tick` loop. Lifecycle events: `nfs-prostreet:status`, `nfs-prostreet:runtime-ready`,
+  `nfs-prostreet:runtime-error`. Entry: `window.__nfsProStreet.start()` (also wired to the module-load
+  `onload` path via the Play flow).
 - Launcher now includes UA/EN UI toggle and module-load error handling.
 - Current engine-integration state: **WIP**. The community PortSpeed project has made
   research progress (AOT recompilation of the original PC `nfs.exe`, WebGL2/D3D9 command
