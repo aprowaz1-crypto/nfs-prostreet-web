@@ -1,0 +1,19 @@
+body, html { margin: 0; padding: 0; background: #000; height: 100%; overflow: hidden; font-family: "Conduit ITC", sans-serif; font-size: 18px; }
+#canvas { position: absolute; left: 50%; top: 0; transform: translateX(-50%); display: block; width: 1280px; height: 720px; outline: 0; cursor: none; touch-action: none; }
+#installer-panel { position: absolute; inset: 0; background: rgba(16, 11, 20, .94); color: #d8d8d8; z-index: 3; overflow: auto; padding: 36px 40px 56px; box-sizing: border-box; text-align: center; }
+#installer-panel h1 { margin: 0 0 12px; font-size: 32px; color: #fff; letter-spacing: .06em; }
+#installer-panel p.hint { color: #99a; max-width: 48em; font-size: 18px; line-height: 1.45; margin: 0 auto 24px; }
+#installer-panel button { background: #6ec26e; color: #183318; border: none; padding: 8px 10px; margin: 6px; font-size: 18px; border-radius: 2px; cursor: pointer; font-family: inherit; }
+#installer-panel button:disabled { opacity: .4; cursor: default; }
+#installer-panel button.danger { background: #3a1c1c; border-color: #a44; color: #fcc; }
+#installer-panel .row { display: flex; justify-content: center; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 12px auto; }
+#installer-panel .row-title { color: #ccc; font-size: 17px; margin-bottom: 10px; }
+#installer-panel label.opt { display: inline-flex; align-items: baseline; gap: 6px; margin: 0 9px; }
+#installer-panel input[type="checkbox"] { width: 18px; height: 18px; }
+#installer-panel .opt-size { color: #888; font-size: 15px; }
+#installer-panel .map-options { flex-direction: column; align-items: center; gap: 0; }
+#install-options[hidden] { display: none; }
+#install-copy-size { color: #aaa; font-size: 16px; margin: 12px auto 0; }
+#install-log { white-space: pre-wrap; font-size: 14px; color: #99a; margin: 16px auto 0; max-width: 68em; max-height: 240px; overflow: auto; text-align: center; }
+#fullscreen-button { display: none; position: absolute; right: 20px; top: 20px; z-index: 5; background: #6ec26e; color: #183318; border: none; border-radius: 2px; padding: 8px 10px; cursor: pointer; font-family: inherit; font-size: 18px; }
+body.game-running:not(.is-fullscreen) #fullscreen-button { display: block; }
