@@ -150,7 +150,15 @@
             const script = document.createElement("script");
             script.src = url.href;
             script.async = true;
-            script.onload = () => log("Web port module loaded. Runtime initialization pending (WIP engine).");
+            script.onload = () => {
+                log("Web port module loaded.");
+                const boot = window.__nfsProStreet;
+                if (boot && typeof boot.start === "function") {
+                    boot.start().then(() => log("Web port runtime ready — engine boot started.")).catch(() => {});
+                } else {
+                    log("Web port runtime not detected — module glue did not expose a start() hook.");
+                }
+            };
             script.onerror = () => {
                 log("Failed to load the web port module. Check that js/nfs-prostreet-sp.js is deployed.");
                 installerPanel.hidden = false;
@@ -199,6 +207,7 @@
 
         applyI18n();
         document.addEventListener("nfs-prostreet:runtime-ready", () => log("Web port runtime ready — starting engine initialization."));
+        document.addEventListener("nfs-prostreet:runtime-error", (e) => log("Web port runtime error: " + (e.detail && e.detail.message ? e.detail.message : "unknown error")));
         log("Ready. Pick your Need for Speed: ProStreet folder, then press Play.");
         window.Module = Module;
     </script>
