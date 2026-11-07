@@ -147,7 +147,17 @@
             const gameScript = document.getElementById("module-script-template").content.querySelector("script");
             const url = new URL(gameScript.src, location.href);
             gameScript.src = url.href;
-            document.body.appendChild(gameScript);
+            const script = document.createElement("script");
+            script.src = url.href;
+            script.async = true;
+            script.onload = () => log("Web port module loaded. Runtime initialization pending (WIP engine).");
+            script.onerror = () => {
+                log("Failed to load the web port module. Check that js/nfs-prostreet-sp.js is deployed.");
+                installerPanel.hidden = false;
+                document.body.classList.remove("game-running");
+                playButton.disabled = false;
+            };
+            document.body.appendChild(script);
         }
 
         function start() {
