@@ -207,7 +207,14 @@
 
         applyI18n();
         document.addEventListener("nfs-prostreet:runtime-ready", () => log("Web port runtime ready — starting engine initialization."));
-        document.addEventListener("nfs-prostreet:runtime-error", (e) => log("Web port runtime error: " + (e.detail && e.detail.message ? e.detail.message : "unknown error")));
+        document.addEventListener("nfs-prostreet:runtime-error", (e) => {
+            const msg = (e.detail && e.detail.message) ? e.detail.message : "unknown error";
+            log("Web port runtime error: " + msg);
+            installerPanel.hidden = false;
+            document.body.classList.remove("game-running");
+            playButton.disabled = false;
+            inputInstalled = false;
+        });
         log("Ready. Pick your Need for Speed: ProStreet folder, then press Play.");
         window.Module = Module;
     </script>
