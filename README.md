@@ -21,6 +21,7 @@ game through a **WebAssembly** runtime in the browser.
 - The actual ProStreet **WASM port runtime** integration point is `js/nfs-prostreet-sp.js`
   (Emscripten `Module`-style interface). The game engine core (AOT-recompiled ProStreet /
   PortSpeed-style WASM) plugs in there.
+- Launcher now includes UA/EN UI toggle and module-load error handling.
 - Current engine-integration state: **WIP**. The community PortSpeed project has made
   research progress (AOT recompilation of the original PC `nfs.exe`, WebGL2/D3D9 command
   consumer, audio/input/OPFS asset streaming), but the complete browser playability path is
