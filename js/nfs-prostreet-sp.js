@@ -5,7 +5,8 @@
 // environment-agnostic so the port can be swapped without touching the launcher UI.
 //
 // Boot chain implemented here (mirrors PortSpeed/web/src/wasm_loader.ts):
-//   fetch /prostreet.json -> compile /prostreet.wasm -> instantiate
+//   fetch prostreet.json -> compile prostreet.wasm -> instantiate
+//   (URLs are resolved relative to the app base, so sub-path deployments work)
 //   -> WASI (wasi_snapshot_preview1) shim -> reactor _initialize -> fntab_init
 //   -> memory size check -> prostreet_load_pe (/data/nfs.exe) -> prostreet_main -> tick loop
 (function () {
@@ -24,6 +25,26 @@
 
   var initializedReactors = new WeakSet();
   var initializedDispatchTables = new WeakSet();
+
+  // Resolve asset URLs against the app base so the launcher also works under a
+  // sub-path (e.g. GitHub Pages: /<repo>/prostreet.json instead of /prostreet.json).
+  function resolveUrl(path) {
+    var base = runtime.baseUrl || window.__NFS_BASE_URL || document.baseURI;
+    try { return new URL(path, base).href; } catch (e) { return path; }
+  }
+
+  // Game folder bridge: the launcher stores the user's indexed files here.
+  // The engine integration can read them on demand via runtime.getGameFile(path).
+  runtime.setFiles = function (files) {
+    runtime.files = Array.isArray(files) ? files : [];
+  };
+  runtime.getGameFile = function (path) {
+    var list = runtime.files || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && list[i].path === path) { return list[i].file; }
+    }
+    return null;
+  };
 
   M.onAbort = M.onAbort || function (e) { fail('abort', 'WebAssembly runtime abort: ' + JSON.stringify(e)); };
 
@@ -223,16 +244,17 @@
     state.phase = 'loading';
     state.startedAt = Date.now();
     setStatus('loading');
-    logLine('[NFS-WASM] boot start: fetch manifest /prostreet.json');
+    var indexed = runtime.files ? runtime.files.length : 0;
+    logLine('[NFS-WASM] boot start: ' + indexed + ' game file(s) indexed, fetch manifest ' + resolveUrl('prostreet.json'));
     try {
-      var manifestResp = await fetch('/prostreet.json');
-      if (!manifestResp.ok) { throw new Error('Failed to fetch /prostreet.json: HTTP ' + manifestResp.status); }
+      var manifestResp = await fetch(resolveUrl('prostreet.json'), { cache: 'no-cache' });
+      if (!manifestResp.ok) { throw new Error('Failed to fetch ' + resolveUrl('prostreet.json') + ': HTTP ' + manifestResp.status); }
       var manifest = await manifestResp.json();
       setStatus('compiling');
-      logLine('[NFS-WASM] boot: compile /prostreet.wasm');
-      var wasmResp = await fetch('/prostreet.wasm');
+      logLine('[NFS-WASM] boot: compile ' + resolveUrl('prostreet.wasm'));
+      var wasmResp = await fetch(resolveUrl('prostreet.wasm'));
       if (!wasmResp.ok) {
-        throw new Error('ProStreet WASM module not found at /prostreet.wasm (HTTP ' + wasmResp.status + ') — engine build pending');
+        throw new Error('ProStreet WASM module not found at ' + resolveUrl('prostreet.wasm') + ' (HTTP ' + wasmResp.status + ') — engine build pending');
       }
       var bytes = await wasmResp.arrayBuffer();
       var module = await WebAssembly.compile(bytes);
@@ -247,16 +269,22 @@
 
       if (engine.exports && typeof engine.exports.prostreet_load_pe === 'function') {
         try {
-          var peResp = await fetch('/data/nfs.exe');
+          var peResp = await fetch(resolveUrl('data/nfs.exe'));
           if (peResp.ok) {
             var peBytes = new Uint8Array(await peResp.arrayBuffer());
             var stagingVa = 0x1f000000;
-            var memU8 = new Uint8Array(engine.memory.buffer);
-            memU8.set(peBytes, stagingVa);
-            var rc = engine.exports.prostreet_load_pe(stagingVa, peBytes.length);
-            logLine('[NFS-WASM] prostreet_load_pe rc=' + rc);
+            var memoryEnd = stagingVa + peBytes.length;
+            if (memoryEnd > engine.memory.buffer.byteLength) {
+              logLine('[NFS-WASM] prostreet_load_pe skipped: image (' + peBytes.length + ' bytes) at 0x' + stagingVa.toString(16) +
+                ' exceeds linear memory (' + engine.memory.buffer.byteLength + ' bytes)');
+            } else {
+              var memU8 = new Uint8Array(engine.memory.buffer);
+              memU8.set(peBytes, stagingVa);
+              var rc = engine.exports.prostreet_load_pe(stagingVa, peBytes.length);
+              logLine('[NFS-WASM] prostreet_load_pe rc=' + rc);
+            }
           } else {
-            logLine('[NFS-WASM] prostreet_load_pe skipped: /data/nfs.exe not found (HTTP ' + peResp.status + ')');
+            logLine('[NFS-WASM] prostreet_load_pe skipped: ' + resolveUrl('data/nfs.exe') + ' not found (HTTP ' + peResp.status + ')');
           }
         } catch (e) {
           logLine('[NFS-WASM] prostreet_load_pe error: ' + (e && e.message ? e.message : e));

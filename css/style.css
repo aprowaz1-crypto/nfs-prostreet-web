@@ -25,3 +25,15 @@ body, html { margin: 0; padding: 0; background: #000; height: 100%; overflow: hi
 #install-log { white-space: pre-wrap; font-size: 14px; color: #99a; margin: 16px auto 0; max-width: 68em; max-height: 240px; overflow: auto; text-align: center; }
 #fullscreen-button { display: none; position: absolute; right: 20px; top: 20px; z-index: 5; background: #6ec26e; color: #183318; border: none; border-radius: 2px; padding: 8px 10px; cursor: pointer; font-family: inherit; font-size: 18px; }
 body.game-running:not(.is-fullscreen) #fullscreen-button { display: block; }
+
+#coi-badge { font-size: 12px; line-height: 1; padding: 5px 9px; border-radius: 999px; border: 1px solid rgba(255,255,255,.16); color: #9fb0d0; white-space: nowrap; }
+#coi-badge.ok { color: #8ee08e; border-color: rgba(110,194,110,.55); }
+#last-folder-button { background: #2a3550; color: #d8e6ff; }
+#installer-panel.dragover { outline: 2px dashed #ff6a00; outline-offset: -14px; }
+#copy-progress { display: block; width: min(520px, 80%); margin: 14px auto 0; accent-color: #ff6a00; }
+#copy-progress[hidden] { display: none; }
+@media (max-width: 760px) {
+    .topbar { flex-wrap: wrap; }
+    #installer-panel { padding: 24px 16px 40px; }
+    #installer-panel h1 { font-size: 26px; }
+}

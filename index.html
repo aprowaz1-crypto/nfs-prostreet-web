@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Need for Speed: ProStreet — Web Port (BYO PC folder)</title>
     <meta name="description" content="Legal BYO web launcher for Need for Speed: ProStreet (PC). The page lets you pick your own legally obtained game folder and run it through the browser-based web port. No game files are hosted." />
+    <meta name="theme-color" content="#0b1020" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./css/style.css" />
     <script src="./coi-serviceworker.js"></script>
 </head>
@@ -18,6 +20,7 @@
             </div>
         </div>
         <div class="top-actions">
+            <span id="coi-badge" class="badge" title="">…</span>
             <button type="button" class="lang" data-lang="uk" aria-pressed="true">UA</button>
             <button type="button" class="lang" data-lang="en" aria-pressed="false">EN</button>
         </div>
@@ -25,198 +28,628 @@
 
     <div id="installer-panel">
         <h1 data-i18n="title">NFS ProStreet</h1>
-        <p class="hint" data-i18n="hint">Pick your Need for Speed: ProStreet folder.<br />The web port mounts your own legally obtained PC installation and runs it in the browser.</p>
+        <p class="hint" data-i18n="hint">Вкажіть теку з Need for Speed: ProStreet.<br />Веб-порт змонтує вашу власну легальну PC-інсталяцію та запустить її у браузері.</p>
         <div class="row">
-            <button id="select-folder-button" type="button" data-i18n="pick">Pick game folder</button>
-            <button id="play-button" type="button" disabled data-i18n="play">Play</button>
-            <button id="wipe-data-button" type="button" class="danger" data-i18n="wipe">Wipe data</button>
+            <button id="select-folder-button" type="button" data-i18n="pick">Обрати теку гри</button>
+            <button id="last-folder-button" type="button" class="secondary" hidden></button>
+            <button id="play-button" type="button" disabled data-i18n="play">Грати</button>
+            <button id="wipe-data-button" type="button" class="danger" data-i18n="wipe">Стерти дані</button>
         </div>
         <div id="install-options" hidden>
             <div class="row">
-                <label class="opt"><input id="include-audio" type="checkbox" checked /> <span data-i18n="audio">Audio</span> <span class="opt-size" id="audio-size"></span></label>
-                <label class="opt"><input id="include-video" type="checkbox" checked /> <span data-i18n="video">Video</span> <span class="opt-size" id="video-size"></span></label>
+                <label class="opt"><input id="include-audio" type="checkbox" checked /> <span data-i18n="audio">Аудіо</span> <span class="opt-size" id="audio-size"></span></label>
+                <label class="opt"><input id="include-video" type="checkbox" checked /> <span data-i18n="video">Відео</span> <span class="opt-size" id="video-size"></span></label>
+                <label class="opt"><input id="persist-opfs" type="checkbox" /> <span data-i18n="persist">Зберегти копію в OPFS</span></label>
             </div>
         </div>
-        <div id="install-copy-size"></div>
-        <div id="install-log"></div>
+        <div id="install-copy-size" hidden></div>
+        <progress id="copy-progress" max="1" value="0" hidden></progress>
+        <div id="install-log" role="log" aria-live="polite"></div>
     </div>
     <canvas id="canvas" width="1280" height="720"></canvas>
     <button id="fullscreen-button" type="button">Fullscreen</button>
-    <template id="module-script-template"><script async src="js/nfs-prostreet-sp.js"></script></template>
     <script>
         const I18N = {
             uk: {
                 subtitle: 'Браузерний лаунчер · BYO PC',
                 title: 'NFS ProStreet',
-                hint: 'Pick your Need for Speed: ProStreet folder.<br />The web port mounts your own legally obtained PC installation and runs it in the browser.',
-                pick: 'Pick game folder',
-                play: 'Play',
-                wipe: 'Wipe data',
-                audio: 'Audio',
-                video: 'Video',
-                copySize: 'Total to copy: {audio} audio + {video} video; ready for mount.',
-                logReady: 'Ready. Pick your Need for Speed: ProStreet folder, then press Play.',
-                logFolder: 'Folder picked: {n} entries. Copy step complete. Press Play.',
-                logStart: 'NFS ProStreet web port: folder accepted, mounting assets (audio={audio}, video={video}), starting engine…',
+                hint: 'Вкажіть теку з Need for Speed: ProStreet.<br />Веб-порт змонтує вашу власну легальну PC-інсталяцію та запустить її у браузері.',
+                pick: 'Обрати теку гри',
+                lastFolder: 'Остання тека: {folder}',
+                play: 'Грати',
+                wipe: 'Стерти дані',
+                audio: 'Аудіо',
+                video: 'Відео',
+                persist: 'Зберегти копію в OPFS',
+                on: 'увімк',
+                off: 'вимк',
+                copySize: 'До копіювання: {audio} аудіо + {video} відео (усього {total}); готово до монтування.',
+                logReady: 'Готово. Оберіть теку Need for Speed: ProStreet, потім натисніть «Грати».',
+                logIndexing: 'Індексую теку «{folder}»…',
+                logFolder: 'Обрано теку «{folder}»: {n} файлів, {size}. Асети проіндексовано, натисніть «Грати».',
+                logNoFiles: 'У вибраній теці не знайдено файлів. Оберіть теку з інсталяцією Need for Speed: ProStreet.',
+                logPickerFallback: 'Системний вибір теки недоступний ({error}) — використовую резервний спосіб.',
+                logPermissionDenied: 'Доступ до збереженої теки не надано.',
+                logStart: 'Веб-порт NFS ProStreet: теку прийнято, монтую асети (аудіо={audio}, відео={video}), запускаю рушій…',
+                logStartError: 'Не вдалося підготувати запуск: {error}',
+                logModuleLoaded: 'Модуль веб-порту завантажено.',
+                logEngineStarted: 'Рушій запущено — ініціалізація триває.',
+                logEngineError: 'Помилка запуску рушія: {error}',
+                logNoRuntime: 'Модуль веб-порту не визначено — відсутній хук start().',
+                logModuleLoadError: 'Не вдалося завантажити модуль js/nfs-prostreet-sp.js.',
+                logCopyStart: 'Копіюю {n} файлів ({size}) у OPFS…',
+                logCopyProgress: 'Копіювання: {done}/{total} ({size})',
+                logCopyDone: 'Копіювання завершено: {n} файлів ({size}) у OPFS.',
+                logNoOpfs: 'OPFS недоступний у цьому браузері — пропускаю збереження копії.',
+                logWipe: 'Стираю збережені дані (OPFS, IndexedDB, кеш, Service Worker)…',
+                coiOk: 'COI: увімк',
+                coiBad: 'COI: вимк',
+                coiTitle: 'Cross-origin isolation: {coi}; SharedArrayBuffer: {sab}',
             },
             en: {
                 subtitle: 'Browser launcher · BYO PC',
                 title: 'Need for Speed: ProStreet',
                 hint: 'Pick your Need for Speed: ProStreet folder.<br />The web port mounts your own legally obtained PC installation and runs it in the browser.',
                 pick: 'Pick game folder',
+                lastFolder: 'Last folder: {folder}',
                 play: 'Play',
                 wipe: 'Wipe data',
                 audio: 'Audio',
                 video: 'Video',
-                copySize: 'Total to copy: {audio} audio + {video} video; ready for mount.',
+                persist: 'Keep a copy in OPFS',
+                on: 'on',
+                off: 'off',
+                copySize: 'Total to copy: {audio} audio + {video} video ({total} total); ready for mount.',
                 logReady: 'Ready. Pick your Need for Speed: ProStreet folder, then press Play.',
-                logFolder: 'Folder picked: {n} entries. Copy step complete. Press Play.',
+                logIndexing: 'Indexing folder "{folder}"…',
+                logFolder: 'Folder picked: "{folder}", {n} files, {size}. Assets indexed, press Play.',
+                logNoFiles: 'No files found in the selected folder. Pick the Need for Speed: ProStreet installation folder.',
+                logPickerFallback: 'Directory picker unavailable ({error}) — using the fallback input.',
+                logPermissionDenied: 'Permission to the saved folder was not granted.',
                 logStart: 'NFS ProStreet web port: folder accepted, mounting assets (audio={audio}, video={video}), starting engine…',
+                logStartError: 'Could not prepare the launch: {error}',
+                logModuleLoaded: 'Web port module loaded.',
+                logEngineStarted: 'Engine started — initialization in progress.',
+                logEngineError: 'Engine start failed: {error}',
+                logNoRuntime: 'Web port runtime not detected — module glue did not expose a start() hook.',
+                logModuleLoadError: 'Failed to load the web port module js/nfs-prostreet-sp.js.',
+                logCopyStart: 'Copying {n} files ({size}) to OPFS…',
+                logCopyProgress: 'Copying: {done}/{total} ({size})',
+                logCopyDone: 'Copy complete: {n} files ({size}) in OPFS.',
+                logNoOpfs: 'OPFS is unavailable in this browser — skipping the persistent copy.',
+                logWipe: 'Wiping stored data (OPFS, IndexedDB, caches, service worker)…',
+                coiOk: 'COI: on',
+                coiBad: 'COI: off',
+                coiTitle: 'Cross-origin isolation: {coi}; SharedArrayBuffer: {sab}',
             },
         };
-        let lang = localStorage.getItem('nfs-prostreet.lang') || 'uk';
-        if (!I18N[lang]) lang = 'uk';
+
+        let lang = 'uk';
+        try {
+            const stored = localStorage.getItem('nfs-prostreet.lang');
+            if (stored && I18N[stored]) lang = stored;
+        } catch (err) { /* storage can be unavailable */ }
+
         const t = (key, vars) => {
-            let text = I18N[lang][key] || I18N.uk[key] || key;
+            let text = (I18N[lang] && I18N[lang][key]) || I18N.uk[key] || key;
             if (vars) for (const k of Object.keys(vars)) text = text.split(`{${k}}`).join(String(vars[k]));
             return text;
         };
-        const applyI18n = () => {
+
+        const formatBytes = (n) => {
+            if (!Number.isFinite(n) || n <= 0) return '0 B';
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            let value = n;
+            let i = 0;
+            while (value >= 1024 && i < units.length - 1) { value /= 1024; i++; }
+            return (i === 0 || value >= 100 ? Math.round(value) : value.toFixed(1)) + ' ' + units[i];
+        };
+
+        const AUDIO_EXT = /\.(mp3|ogg|opus|wav|flac|m4a|aac|mus|abk|snr|fsb|sdt|sbk|asf|vag|adp)$/i;
+        const VIDEO_EXT = /\.(vp6|bik|bik2|bk2|vid|mp4|m4v|webm|ogv|avi|mov|wmv)$/i;
+        const categoryOf = (path) => (AUDIO_EXT.test(path) ? 'audio' : VIDEO_EXT.test(path) ? 'video' : 'other');
+
+        const canvas = document.getElementById('canvas');
+        const fullscreenButton = document.getElementById('fullscreen-button');
+        const installerPanel = document.getElementById('installer-panel');
+        const playButton = document.getElementById('play-button');
+        const selectFolderButton = document.getElementById('select-folder-button');
+        const lastFolderButton = document.getElementById('last-folder-button');
+        const wipeDataButton = document.getElementById('wipe-data-button');
+        const installOptions = document.getElementById('install-options');
+        const includeAudio = document.getElementById('include-audio');
+        const includeVideo = document.getElementById('include-video');
+        const persistOpfs = document.getElementById('persist-opfs');
+        const audioSize = document.getElementById('audio-size');
+        const videoSize = document.getElementById('video-size');
+        const copySize = document.getElementById('install-copy-size');
+        const copyProgress = document.getElementById('copy-progress');
+        const installLog = document.getElementById('install-log');
+        const coiBadge = document.getElementById('coi-badge');
+
+        const app = {
+            entries: [],
+            totals: { audio: 0, video: 0, other: 0, all: 0 },
+            folderName: '',
+            savedHandle: null,
+            busy: false,
+            picking: false,
+        };
+
+        function runtime() { return (window.__nfsProStreet = window.__nfsProStreet || {}); }
+
+        function log(line) {
+            installLog.textContent += line + '\n';
+            installLog.scrollTop = installLog.scrollHeight;
+        }
+
+        function applyI18n() {
             document.documentElement.lang = lang;
             document.querySelectorAll('[data-i18n]').forEach((el) => {
                 const key = el.getAttribute('data-i18n');
-                if (key && I18N[lang][key] !== undefined) el.innerHTML = t(key);
+                if (key && I18N[lang] && I18N[lang][key] !== undefined) el.innerHTML = t(key);
             });
             document.querySelectorAll('.lang').forEach((btn) => {
                 btn.setAttribute('aria-pressed', String(btn.getAttribute('data-lang') === lang));
             });
-            localStorage.setItem('nfs-prostreet.lang', lang);
-            setCopySize();
-        };
-        const canvas = document.getElementById("canvas");
-        const fullscreenButton = document.getElementById("fullscreen-button");
-        const installerPanel = document.getElementById("installer-panel");
-        const playButton = document.getElementById("play-button");
-        const selectFolderButton = document.getElementById("select-folder-button");
-        const wipeDataButton = document.getElementById("wipe-data-button");
-        const installOptions = document.getElementById("install-options");
-        const includeAudio = document.getElementById("include-audio");
-        const includeVideo = document.getElementById("include-video");
-        const audioSize = document.getElementById("audio-size");
-        const videoSize = document.getElementById("video-size");
-        const copySize = document.getElementById("install-copy-size");
-        const installLog = document.getElementById("install-log");
-
-        function log(t2, ...a) { installLog.textContent += (t2) + (a.length ? " " + a.join(" ") : "") + "\n"; }
-        function setCopySize() {
-            copySize.textContent = t('copySize', { audio: includeAudio.checked ? audioSize.textContent : '0', video: includeVideo.checked ? videoSize.textContent : '0' });
+            try { localStorage.setItem('nfs-prostreet.lang', lang); } catch (err) { /* ignore */ }
+            updateLastFolderLabel();
+            renderSizes();
+            updateCoiBadge();
         }
-        includeAudio.addEventListener("change", setCopySize);
-        includeVideo.addEventListener("change", setCopySize);
-        setCopySize();
 
-        let Module = {
+        function setCopySize() {
+            const audio = includeAudio.checked ? formatBytes(app.totals.audio) : formatBytes(0);
+            const video = includeVideo.checked ? formatBytes(app.totals.video) : formatBytes(0);
+            copySize.textContent = t('copySize', { audio: audio, video: video, total: formatBytes(app.totals.all) });
+        }
+
+        function renderSizes() {
+            audioSize.textContent = formatBytes(app.totals.audio);
+            videoSize.textContent = formatBytes(app.totals.video);
+            installOptions.hidden = app.entries.length === 0;
+            copySize.hidden = app.entries.length === 0;
+            setCopySize();
+        }
+
+        function selectedEntries() {
+            return app.entries.filter((entry) => {
+                const category = categoryOf(entry.path);
+                if (category === 'audio') return includeAudio.checked;
+                if (category === 'video') return includeVideo.checked;
+                return true;
+            });
+        }
+
+        function finishPick(entries, folderName) {
+            if (!entries.length) {
+                log(t('logNoFiles'));
+                playButton.disabled = true;
+                return;
+            }
+            app.entries = entries;
+            app.folderName = folderName || '';
+            app.totals = { audio: 0, video: 0, other: 0, all: 0 };
+            for (const entry of entries) {
+                const category = categoryOf(entry.path);
+                app.totals[category] += entry.size;
+                app.totals.all += entry.size;
+            }
+            const rt = runtime();
+            rt.files = entries;
+            if (typeof rt.setFiles === 'function') rt.setFiles(entries);
+            playButton.disabled = false;
+            lastFolderButton.hidden = true;
+            renderSizes();
+            log(t('logFolder', {
+                folder: app.folderName || '—',
+                n: entries.length,
+                size: formatBytes(app.totals.all),
+            }));
+            window.dispatchEvent(new CustomEvent('nfs-prostreet:files-picked', {
+                detail: { count: entries.length, totals: { ...app.totals }, folder: app.folderName },
+            }));
+        }
+
+        async function walkDirectoryHandle(dir, prefix, out) {
+            for await (const handle of dir.values()) {
+                const path = prefix ? prefix + '/' + handle.name : handle.name;
+                if (handle.kind === 'file') {
+                    try {
+                        const file = await handle.getFile();
+                        out.push({ path: path, file: file, size: file.size });
+                    } catch (err) { /* skip unreadable file */ }
+                } else if (handle.kind === 'directory') {
+                    await walkDirectoryHandle(handle, path, out);
+                }
+            }
+        }
+
+        async function indexDirectoryHandle(handle) {
+            log(t('logIndexing', { folder: handle.name }));
+            const entries = [];
+            try {
+                await walkDirectoryHandle(handle, '', entries);
+            } catch (err) {
+                log(t('logNoFiles'));
+                return;
+            }
+            finishPick(entries, handle.name);
+        }
+
+        function pickViaInput() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.webkitdirectory = true;
+            input.multiple = true;
+            input.style.display = 'none';
+            input.addEventListener('change', () => {
+                const files = input.files ? Array.from(input.files) : [];
+                const entries = files.map((file) => ({
+                    path: file.webkitRelativePath || file.name,
+                    file: file,
+                    size: file.size,
+                }));
+                const rootName = entries.length && entries[0].path.includes('/') ? entries[0].path.split('/')[0] : '';
+                finishPick(entries, rootName);
+                input.remove();
+            });
+            document.body.appendChild(input);
+            input.click();
+        }
+
+        async function pickFolder() {
+            if (app.picking || app.busy) return;
+            app.picking = true;
+            try {
+                if (typeof window.showDirectoryPicker === 'function') {
+                    try {
+                        const handle = await window.showDirectoryPicker({ id: 'prostreet-folder', mode: 'read' });
+                        await indexDirectoryHandle(handle);
+                        await saveFolderHandle(handle);
+                        return;
+                    } catch (err) {
+                        if (err && err.name === 'AbortError') return;
+                        log(t('logPickerFallback', { error: (err && err.message) ? err.message : String(err) }));
+                    }
+                }
+                pickViaInput();
+            } finally {
+                app.picking = false;
+            }
+        }
+
+        // ----- IndexedDB: remember the last picked folder handle (Chromium) -----
+        const DB_NAME = 'nfs-prostreet';
+        const DB_STORE = 'kv';
+
+        function openDb() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, 1);
+                request.onupgradeneeded = () => { request.result.createObjectStore(DB_STORE); };
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        async function idbSet(key, value) {
+            const db = await openDb();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(DB_STORE, 'readwrite');
+                tx.objectStore(DB_STORE).put(value, key);
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+        }
+
+        async function idbGet(key) {
+            const db = await openDb();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(DB_STORE, 'readonly');
+                const request = tx.objectStore(DB_STORE).get(key);
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        function idbDeleteDb() {
+            return new Promise((resolve) => {
+                const request = indexedDB.deleteDatabase(DB_NAME);
+                request.onsuccess = request.onerror = request.onblocked = () => resolve();
+            });
+        }
+
+        async function saveFolderHandle(handle) {
+            try { await idbSet('folder', handle); } catch (err) { /* private mode */ }
+        }
+
+        function updateLastFolderLabel() {
+            if (!app.savedHandle || app.entries.length) { lastFolderButton.hidden = true; return; }
+            lastFolderButton.textContent = t('lastFolder', { folder: app.savedHandle.name || '—' });
+            lastFolderButton.hidden = false;
+        }
+
+        async function restoreFolderHandle() {
+            try {
+                const handle = await idbGet('folder');
+                if (!handle || typeof handle.queryPermission !== 'function') return;
+                const permission = await handle.queryPermission({ mode: 'read' });
+                if (permission === 'denied') return;
+                app.savedHandle = handle;
+                updateLastFolderLabel();
+            } catch (err) { /* IndexedDB unavailable */ }
+        }
+
+        // ----- Optional persistent copy to OPFS -----
+        async function copyToOpfs() {
+            if (!(navigator.storage && typeof navigator.storage.getDirectory === 'function')) {
+                log(t('logNoOpfs'));
+                return;
+            }
+            const list = selectedEntries();
+            if (!list.length) return;
+            const bytesTotal = list.reduce((sum, entry) => sum + entry.size, 0);
+            log(t('logCopyStart', { n: list.length, size: formatBytes(bytesTotal) }));
+            const root = await navigator.storage.getDirectory();
+            const gameRoot = await root.getDirectoryHandle('prostreet', { create: true });
+            copyProgress.hidden = false;
+            copyProgress.max = list.length;
+            copyProgress.value = 0;
+            let done = 0;
+            let bytes = 0;
+            try {
+                for (const entry of list) {
+                    const parts = entry.path.split('/').filter(Boolean);
+                    if (!parts.length) continue;
+                    let dir = gameRoot;
+                    for (let i = 0; i < parts.length - 1; i++) {
+                        dir = await dir.getDirectoryHandle(parts[i], { create: true });
+                    }
+                    const fileHandle = await dir.getFileHandle(parts[parts.length - 1], { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(entry.file);
+                    await writable.close();
+                    done++;
+                    bytes += entry.size;
+                    copyProgress.value = done;
+                    if (done % 25 === 0 || done === list.length) {
+                        log(t('logCopyProgress', { done: done, total: list.length, size: formatBytes(bytes) }));
+                    }
+                }
+                const manifest = {
+                    createdAt: new Date().toISOString(),
+                    folder: app.folderName,
+                    totals: app.totals,
+                    files: list.map((entry) => ({ path: entry.path, size: entry.size })),
+                };
+                const manifestHandle = await gameRoot.getFileHandle('manifest.json', { create: true });
+                const manifestWriter = await manifestHandle.createWritable();
+                await manifestWriter.write(JSON.stringify(manifest, null, 2));
+                await manifestWriter.close();
+            } finally {
+                copyProgress.hidden = true;
+            }
+            log(t('logCopyDone', { n: done, size: formatBytes(bytes) }));
+        }
+
+        // ----- Drag & drop folders -----
+        function readFsEntry(entry, prefix) {
+            return new Promise((resolve) => {
+                const path = prefix ? prefix + '/' + entry.name : entry.name;
+                if (entry.isFile) {
+                    entry.file(
+                        (file) => resolve([{ path: path, file: file, size: file.size }]),
+                        () => resolve([])
+                    );
+                    return;
+                }
+                if (!entry.isDirectory) { resolve([]); return; }
+                const reader = entry.createReader();
+                const children = [];
+                const readBatch = () => {
+                    reader.readEntries(async (batch) => {
+                        if (batch.length) {
+                            children.push(...batch);
+                            readBatch();
+                            return;
+                        }
+                        const out = [];
+                        for (const child of children) out.push(...await readFsEntry(child, path));
+                        resolve(out);
+                    }, () => resolve([]));
+                };
+                readBatch();
+            });
+        }
+
+        installerPanel.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            installerPanel.classList.add('dragover');
+        });
+        installerPanel.addEventListener('dragleave', (event) => {
+            if (event.target === installerPanel) installerPanel.classList.remove('dragover');
+        });
+        installerPanel.addEventListener('drop', async (event) => {
+            event.preventDefault();
+            installerPanel.classList.remove('dragover');
+            if (app.busy) return;
+            const transfer = event.dataTransfer;
+            if (!transfer) return;
+            const entries = [];
+            const items = transfer.items ? Array.from(transfer.items) : [];
+            const canUseEntries = items.length && typeof items[0].webkitGetAsEntry === 'function';
+            if (canUseEntries) {
+                for (const item of items) {
+                    const entry = item.webkitGetAsEntry && item.webkitGetAsEntry();
+                    if (entry) entries.push(...await readFsEntry(entry, ''));
+                }
+            } else if (transfer.files && transfer.files.length) {
+                for (const file of Array.from(transfer.files)) {
+                    entries.push({ path: file.webkitRelativePath || file.name, file: file, size: file.size });
+                }
+            }
+            finishPick(entries, entries.length ? (entries[0].path.split('/')[0] || '') : '');
+        });
+
+        // ----- Fullscreen & canvas -----
+        fullscreenButton.addEventListener('click', async () => {
+            try {
+                await document.documentElement.requestFullscreen();
+                await navigator.keyboard?.lock?.();
+            } catch (err) { /* ignore */ }
+        });
+        document.addEventListener('fullscreenchange', () => {
+            const isFullscreen = !!document.fullscreenElement;
+            document.body.classList.toggle('is-fullscreen', isFullscreen);
+            if (isFullscreen) navigator.keyboard?.lock?.().catch(() => {});
+        });
+
+        // ----- Module object expected by the WASM glue -----
+        window.Module = {
             canvas: canvas,
             width: 1280,
             height: 720,
-            locateFile: (e) => e,
-            kisakJoinCode: null,
-            kisakLanUrl: "wss://mw.slqnt.dev/lan?v=1",
-            kisakBots: false,
-            kisakBotsAdd: 8,
-            print: console.log,
-            printErr: console.log,
+            locateFile: (path) => path,
+            print: (line) => log('[guest] ' + line),
+            printErr: (line) => log('[guest:err] ' + line),
             setStatus: () => {},
-            onAbort: (e) => console.log("abort: " + e),
-            kisakInputBase: 0,
-            kisakWantLockOff: 2,
-            HEAP32: null,
-            wasmMemory: null,
+            onAbort: (reason) => log('[abort] ' + reason),
         };
 
-        let inputInstalled = false;
-        window.__nfsInstallInput = function () {
-            const base = 0;
-            const wantLockOff = 2;
-            const e = base;
-            return { ok: true, inputBase: e, wantLockOff: wantLockOff };
-        };
+        let gameScriptLoading = false;
+
+        function restoreLauncherUi() {
+            installerPanel.hidden = false;
+            document.body.classList.remove('game-running');
+            playButton.disabled = app.entries.length === 0;
+        }
 
         function startGame() {
-            if (document.body.contains(document.getElementById("module-script-template").content.querySelector("script"))) return;
-            const gameScript = document.getElementById("module-script-template").content.querySelector("script");
-            const url = new URL(gameScript.src, location.href);
-            gameScript.src = url.href;
-            const script = document.createElement("script");
-            script.src = url.href;
+            if (gameScriptLoading) return;
+            gameScriptLoading = true;
+            const script = document.createElement('script');
+            script.src = new URL('js/nfs-prostreet-sp.js', document.baseURI).href;
             script.async = true;
             script.onload = () => {
-                log("Web port module loaded.");
+                gameScriptLoading = false;
+                log(t('logModuleLoaded'));
                 const boot = window.__nfsProStreet;
-                if (boot && typeof boot.start === "function") {
-                    boot.start().then(() => log("Web port runtime ready — engine boot started.")).catch(() => {});
+                if (boot && typeof boot.start === 'function') {
+                    boot.start()
+                        .then(() => log(t('logEngineStarted')))
+                        .catch((err) => {
+                            log(t('logEngineError', { error: (err && err.message) ? err.message : String(err) }));
+                            restoreLauncherUi();
+                        });
                 } else {
-                    log("Web port runtime not detected — module glue did not expose a start() hook.");
+                    log(t('logNoRuntime'));
+                    restoreLauncherUi();
                 }
             };
             script.onerror = () => {
-                log("Failed to load the web port module. Check that js/nfs-prostreet-sp.js is deployed.");
-                installerPanel.hidden = false;
-                document.body.classList.remove("game-running");
-                playButton.disabled = false;
+                gameScriptLoading = false;
+                log(t('logModuleLoadError'));
+                restoreLauncherUi();
             };
             document.body.appendChild(script);
         }
 
-        function start() {
-            if (inputInstalled) return;
-            inputInstalled = true;
-            installerPanel.hidden = true;
-            document.body.classList.add("game-running");
-            log('NFS ProStreet web port: folder accepted, mounting assets (audio=' + (includeAudio.checked ? 'on' : 'off') + ', video=' + (includeVideo.checked ? 'on' : 'off') + '), starting engine…');
-            setTimeout(startGame, 30);
+        async function start() {
+            if (app.busy || !app.entries.length) return;
+            app.busy = true;
+            playButton.disabled = true;
+            try {
+                if (persistOpfs.checked) await copyToOpfs();
+                log(t('logStart', {
+                    audio: includeAudio.checked ? t('on') : t('off'),
+                    video: includeVideo.checked ? t('on') : t('off'),
+                }));
+                installerPanel.hidden = true;
+                document.body.classList.add('game-running');
+                setTimeout(startGame, 30);
+            } catch (err) {
+                log(t('logStartError', { error: (err && err.message) ? err.message : String(err) }));
+                restoreLauncherUi();
+            } finally {
+                app.busy = false;
+                if (!document.body.classList.contains('game-running')) playButton.disabled = app.entries.length === 0;
+            }
         }
 
-        selectFolderButton.addEventListener("click", () => {
-            const input = document.createElement("input");
-            input.type = "file";
-            input.webkitdirectory = true;
-            input.style.display = "none";
-            input.addEventListener("change", () => {
-                const files = input.files ? Array.from(input.files) : [];
-                log('Folder picked: ' + files.length + ' entries.');
-                for (const f of files.slice(0, 200)) log("  " + f.name + (f.size ? " (" + f.size + ")" : ""));
-                log('Copy step complete. Press Play.');
-                playButton.disabled = false;
-            });
-            document.body.appendChild(input);
-            input.click();
+        async function wipeData() {
+            wipeDataButton.disabled = true;
+            log(t('logWipe'));
+            try { localStorage.clear(); } catch (err) { /* ignore */ }
+            try {
+                if (window.caches && typeof caches.keys === 'function') {
+                    const keys = await caches.keys();
+                    await Promise.all(keys.map((key) => caches.delete(key)));
+                }
+            } catch (err) { /* ignore */ }
+            try {
+                if (navigator.storage && typeof navigator.storage.getDirectory === 'function') {
+                    const root = await navigator.storage.getDirectory();
+                    await root.removeEntry('prostreet', { recursive: true });
+                }
+            } catch (err) { /* folder may not exist */ }
+            try { await idbDeleteDb(); } catch (err) { /* ignore */ }
+            try {
+                if (navigator.serviceWorker && typeof navigator.serviceWorker.getRegistrations === 'function') {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(registrations.map((registration) => registration.unregister()));
+                }
+            } catch (err) { /* ignore */ }
+            location.reload();
+        }
+
+        function updateCoiBadge() {
+            const isolated = !!window.crossOriginIsolated;
+            const sab = typeof SharedArrayBuffer !== 'undefined';
+            const ok = isolated && sab;
+            coiBadge.textContent = ok ? t('coiOk') : t('coiBad');
+            coiBadge.classList.toggle('ok', ok);
+            coiBadge.title = t('coiTitle', { coi: isolated ? t('on') : t('off'), sab: sab ? t('on') : t('off') });
+        }
+
+        // ----- Wiring -----
+        includeAudio.addEventListener('change', setCopySize);
+        includeVideo.addEventListener('change', setCopySize);
+        selectFolderButton.addEventListener('click', pickFolder);
+        lastFolderButton.addEventListener('click', async () => {
+            if (!app.savedHandle) return;
+            try {
+                const permission = await app.savedHandle.requestPermission({ mode: 'read' });
+                if (permission !== 'granted') { log(t('logPermissionDenied')); return; }
+                lastFolderButton.hidden = true;
+                await indexDirectoryHandle(app.savedHandle);
+            } catch (err) {
+                log(t('logPickerFallback', { error: (err && err.message) ? err.message : String(err) }));
+                pickViaInput();
+            }
         });
-        playButton.addEventListener("click", start);
-        wipeDataButton.addEventListener("click", () => { try { localStorage.clear(); } catch (err) {} location.reload(); });
-
-        fullscreenButton.addEventListener("click", async () => { try { await document.documentElement.requestFullscreen(); await navigator.keyboard?.lock?.(); } catch (err) {} });
-        document.addEventListener("fullscreenchange", () => { const e = !!document.fullscreenElement; document.body.classList.toggle("is-fullscreen", e); if (e) navigator.keyboard?.lock?.().catch(() => {}); });
-
-        document.querySelectorAll(".lang").forEach((btn) => {
-            btn.addEventListener("click", () => {
-                lang = btn.getAttribute("data-lang") || "uk";
-                applyI18n();
+        playButton.addEventListener('click', start);
+        wipeDataButton.addEventListener('click', wipeData);
+        document.querySelectorAll('.lang').forEach((button) => {
+            button.addEventListener('click', () => {
+                const next = button.getAttribute('data-lang');
+                if (I18N[next]) { lang = next; applyI18n(); }
             });
+        });
+
+        document.addEventListener('nfs-prostreet:runtime-ready', () => log('Web port runtime ready — starting engine initialization.'));
+        document.addEventListener('nfs-prostreet:runtime-error', (event) => {
+            const message = (event.detail && event.detail.message) ? event.detail.message : 'unknown error';
+            log('Web port runtime error: ' + message);
+            restoreLauncherUi();
+        });
+        document.addEventListener('nfs-prostreet:status', (event) => {
+            if (event.detail && event.detail.status) log('[status] ' + event.detail.status);
         });
 
         applyI18n();
-        document.addEventListener("nfs-prostreet:runtime-ready", () => log("Web port runtime ready — starting engine initialization."));
-        document.addEventListener("nfs-prostreet:runtime-error", (e) => {
-            const msg = (e.detail && e.detail.message) ? e.detail.message : "unknown error";
-            log("Web port runtime error: " + msg);
-            installerPanel.hidden = false;
-            document.body.classList.remove("game-running");
-            playButton.disabled = false;
-            inputInstalled = false;
-        });
-        log("Ready. Pick your Need for Speed: ProStreet folder, then press Play.");
-        window.Module = Module;
+        log(t('logReady'));
+        updateCoiBadge();
+        restoreFolderHandle();
     </script>
 </body>
 </html>
